@@ -66,34 +66,80 @@ struct lazyV(V)
 struct coroutine(alias fn)
 {
 
+	static if(is(ReturnType!fn == void))
+		alias bool RetType;
+	else 
+		alias ReturnType!fn RetType;
+
 	shared helper coro;
 
 	private shared class helper
 	{
-		shared ReturnType!fn result;
-		shared ParameterTypeTuple!fn args;
+		static if(!is(RetType == void)) 		shared RetType result;
+		static if(ParameterTypeTuple!fn.length) shared ParameterTypeTuple!fn args;
 		shared bool ready = false;
 		shared Tid tid;
 		
 		static auto func(shared helper co) 
 		{
-			co.result = fn(co.args); 
+			static if(is(ReturnType!fn == void))
+			{
+				static if(ParameterTypeTuple!fn.length) 
+					fn(co.args);
+				else 
+					fn();
+			}
+			else 
+			{
+				static if(ParameterTypeTuple!fn.length) 
+					co.result = fn(co.args); 
+				else 
+					co.result = fn();
+			}
 			co.ready = true;
 		}
 	}
 
 	this(ParameterTypeTuple!fn args)
 	{				
-		coro = cast(shared)new helper();
-		coro.args = args;
+		coro = new shared(helper)();
+		static if(ParameterTypeTuple!fn.length) 
+			coro.args = args;
 		coro.tid = cast(shared)spawn(&helper.func, coro);
 	}
 
-	@property ReturnType!fn opCall()
+ 	static if(!ParameterTypeTuple!fn.length)
 	{
-		while(!coro.ready)
-			Thread.sleep( dur!("msecs")( 1 ) );
-		return coro.result;
+		this(int line = __LINE__)
+		{
+			static assert(ParameterTypeTuple!fn.length == 0, "Cannot use empty-args constructor on function that takes arguments");
+			coro = new shared(helper)();
+			coro.tid = cast(shared) spawn(&helper.func, coro);		
+		}
+	}
+
+	static if(!ParameterTypeTuple!fn.length)
+	{
+		@property static RetType opCall()
+		{
+			static bool func(int i)
+			{
+				fn();
+				return true;
+			}
+			coroutine!func c = coroutine!func(0);
+			return c;
+		}
+	} 
+	else 
+	{
+		@property RetType opCall()
+		{
+			while(!coro.ready)
+				Thread.sleep( dur!("msecs")( 1 ) );
+			static if(is(RetType == void)) return true;
+			else return coro.result;
+		}
 	}
 
 	alias opCall this;
