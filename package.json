@@ -1,0 +1,10 @@
+{
+	"name": "extensions",
+	"description": "A minimal D application.",
+	"copyright": "Copyright © 2014, edmund",
+	"authors": ["edmund"],
+	"dependencies": {
+	},
+	"targetType":"staticLibrary",
+	"dflags-dmd":["-Dddoc"]
+}
