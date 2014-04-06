@@ -100,12 +100,15 @@ struct coroutine(alias fn)
 		}
 	}
 
-	this(ParameterTypeTuple!fn args)
-	{				
-		coro = new shared(helper)();
-		static if(ParameterTypeTuple!fn.length) 
+	static if(ParameterTypeTuple!fn.length) 
+	{
+		this(ParameterTypeTuple!fn args)
+		{				
+			pragma(msg, typeof(args), typeof(coro), typeof(coro.args));
+			coro = new shared(helper)();
 			coro.args = args;
-		coro.tid = cast(shared)spawn(&helper.func, coro);
+			coro.tid = cast(shared)spawn(&helper.func, coro);
+		}
 	}
 
  	static if(!ParameterTypeTuple!fn.length)
@@ -227,6 +230,21 @@ class channel(T)
 			return cast(T)(cast(shared)this).popFront();
 		}
 
+		@async public T receiveWithTimeout(Duration d)
+		{
+
+			import std.datetime;
+			auto timeout = Clock.currTime(UTC()) + d;
+
+			while((cast()list).empty)
+			{
+				if(Clock.currTime>timeout)
+					return T.init;
+				Thread.sleep(dur!"msecs"(1));
+			}
+			return cast(T)(cast(shared)this).popFront();
+		}
+
 		static void run(shared internal i)
 		{
 			T t1;
@@ -293,6 +311,11 @@ class channel(T)
 		return (cast(internal)internals).receive();
 	}
 
+	@async public shared T receiveWithTimeout(Duration d)
+	{
+		return (cast(internal)internals).receiveWithTimeout(d);
+	}
+
 	public synchronized void onReceive(bool function (T) fn)
 	{
 		onReceivef = fn;
@@ -345,5 +368,5 @@ alias coroutine go;
 */
 auto make_chan(T)()
 {
-	return new shared(channel!T);
+	return cast(shared) new channel!T;
 }
